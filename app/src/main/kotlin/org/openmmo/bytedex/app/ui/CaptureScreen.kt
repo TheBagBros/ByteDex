@@ -36,24 +36,20 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import org.openmmo.bytedex.app.auth.CurrentUser
 import org.openmmo.bytedex.app.capture.CaptureStats
 import org.openmmo.bytedex.proxy.netty.PacketSink
 
 @Composable
 fun CaptureScreen(
-    user: CurrentUser,
     pid: String,
     statsFlow: StateFlow<CaptureStats>,
-    onSignOut: () -> Unit,
     onDetach: suspend () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val stats by statsFlow.collectAsState()
     var detaching by remember { mutableStateOf(false) }
 
-    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        IdentityHeader(user = user, onSignOut = onSignOut)
+    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Column(
             modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 20.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp),

@@ -80,8 +80,6 @@ sealed interface AttachStatus {
 
 @Composable
 fun AttachScreen(
-    user: CurrentUser,
-    onSignOut: () -> Unit,
     attach: suspend (pid: String) -> Result<AgentAttacher.Result>,
 ) {
     val scope = rememberCoroutineScope()
@@ -106,8 +104,7 @@ fun AttachScreen(
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        IdentityHeader(user = user, onSignOut = onSignOut)
+    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Box(modifier = Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 20.dp)) {
             Column(
                 verticalArrangement = Arrangement.spacedBy(14.dp),

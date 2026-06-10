@@ -67,6 +67,11 @@ class CaptureService(
     private val statsFlow = MutableStateFlow(CaptureStats.empty())
     val stats: StateFlow<CaptureStats> = statsFlow.asStateFlow()
 
+    private val packetSeq = AtomicLong(0)
+    private val recentBuffer = ArrayDeque<RecordedPacket>(RECENT_BUFFER_CAP)
+    private val recentFlow = MutableStateFlow<List<RecordedPacket>>(emptyList())
+    val recentPackets: StateFlow<List<RecordedPacket>> = recentFlow.asStateFlow()
+
     suspend fun open(gameVersion: Long, clientInfo: String? = null): Result<String> = runCatching {
         close()
         val res = authed { token ->
@@ -91,6 +96,8 @@ class CaptureService(
         totalBytes.set(0)
         perProtocol.clear()
         synchronized(rateWindow) { rateWindow.clear() }
+        synchronized(recentBuffer) { recentBuffer.clear() }
+        recentFlow.value = emptyList()
         sessionGameVersion = gameVersion
         sessionStartedAtMs = System.currentTimeMillis()
         statsFlow.value = CaptureStats(
@@ -108,6 +115,7 @@ class CaptureService(
         while (true) {
             delay(STATS_TICK_MS.milliseconds)
             statsFlow.value = snapshotStats()
+            recentFlow.value = synchronized(recentBuffer) { recentBuffer.toList() }
         }
     }
 
@@ -137,6 +145,8 @@ class CaptureService(
         statsJob?.cancel()
         statsJob = null
         statsFlow.value = CaptureStats.empty()
+        synchronized(recentBuffer) { recentBuffer.clear() }
+        recentFlow.value = emptyList()
         runCatching {
             authed { token ->
                 http.post("$baseUrl/sessions/$id/close") {
@@ -159,6 +169,18 @@ class CaptureService(
         totalPackets.incrementAndGet()
         totalBytes.addAndGet(payload.size.toLong())
         perProtocol.computeIfAbsent(protocol) { AtomicLong(0) }.incrementAndGet()
+        val record = RecordedPacket(
+            seq = packetSeq.incrementAndGet(),
+            protocol = protocol,
+            direction = direction,
+            packetId = packetId,
+            size = payload.size,
+            capturedAtEpochMs = capturedAtEpochMillis,
+        )
+        synchronized(recentBuffer) {
+            recentBuffer.addFirst(record)
+            while (recentBuffer.size > RECENT_BUFFER_CAP) recentBuffer.removeLast()
+        }
         synchronized(rateWindow) {
             val cutoff = capturedAtEpochMillis - RATE_WINDOW_MS
             while (rateWindow.isNotEmpty() && rateWindow.first() < cutoff) {
@@ -284,8 +306,18 @@ class CaptureService(
         private const val MAX_BATCH_LATENCY_MS = 500L
         private const val RATE_WINDOW_MS = 1_000L
         private const val STATS_TICK_MS = 250L
+        private const val RECENT_BUFFER_CAP = 2_000
     }
 }
+
+data class RecordedPacket(
+    val seq: Long,
+    val protocol: PacketSink.Protocol,
+    val direction: PacketSink.Direction,
+    val packetId: Int,
+    val size: Int,
+    val capturedAtEpochMs: Long,
+)
 
 data class CaptureStats(
     val sessionId: String?,

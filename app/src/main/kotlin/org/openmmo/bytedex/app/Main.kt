@@ -1,10 +1,19 @@
 package org.openmmo.bytedex.app
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -16,8 +25,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
@@ -30,7 +41,9 @@ import org.openmmo.bytedex.app.auth.TokenStore
 import org.openmmo.bytedex.app.capture.CaptureService
 import org.openmmo.bytedex.app.ui.AttachScreen
 import org.openmmo.bytedex.app.ui.CaptureScreen
+import org.openmmo.bytedex.app.ui.IdentityHeader
 import org.openmmo.bytedex.app.ui.LoginScreen
+import org.openmmo.bytedex.app.ui.PacketsScreen
 import org.openmmo.bytedex.proxy.Proxy
 import kotlinx.coroutines.runBlocking
 
@@ -138,6 +151,11 @@ private fun Root(tokenStore: TokenStore, captureService: CaptureService) {
     }
 }
 
+private enum class HomeTab(val label: String) {
+    HOME("Home"),
+    PACKETS("Packets"),
+}
+
 @Composable
 private fun Home(
     user: CurrentUser,
@@ -145,29 +163,76 @@ private fun Home(
     onSignOut: () -> Unit,
 ) {
     var home: HomeState by remember { mutableStateOf(HomeState.PickingTarget) }
+    var tab: HomeTab by remember { mutableStateOf(HomeTab.HOME) }
 
-    when (val h = home) {
-        HomeState.PickingTarget -> AttachScreen(
-            user = user,
-            onSignOut = onSignOut,
-            attach = { pid ->
-                AgentAttacher.attach(pid).mapCatching { result ->
-                    captureService.open(result.gameVersion).getOrThrow()
-                    home = HomeState.Capturing(pid = pid, gameVersion = result.gameVersion)
-                    result
+    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        IdentityHeader(user = user, onSignOut = onSignOut)
+        TabBar(selected = tab, onSelect = { tab = it })
+        Box(modifier = Modifier.fillMaxSize().weight(1f)) {
+            when (tab) {
+                HomeTab.HOME -> when (val h = home) {
+                    HomeState.PickingTarget -> AttachScreen(
+                        attach = { pid ->
+                            AgentAttacher.attach(pid).mapCatching { result ->
+                                captureService.open(result.gameVersion).getOrThrow()
+                                home = HomeState.Capturing(pid = pid, gameVersion = result.gameVersion)
+                                result
+                            }
+                        },
+                    )
+
+                    is HomeState.Capturing -> CaptureScreen(
+                        pid = h.pid,
+                        statsFlow = captureService.stats,
+                        onDetach = {
+                            captureService.close()
+                            home = HomeState.PickingTarget
+                        },
+                    )
                 }
-            },
-        )
 
-        is HomeState.Capturing -> CaptureScreen(
-            user = user,
-            pid = h.pid,
-            statsFlow = captureService.stats,
-            onSignOut = onSignOut,
-            onDetach = {
-                captureService.close()
-                home = HomeState.PickingTarget
-            },
+                HomeTab.PACKETS -> PacketsScreen(packetsFlow = captureService.recentPackets)
+            }
+        }
+    }
+}
+
+@Composable
+private fun TabBar(selected: HomeTab, onSelect: (HomeTab) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(horizontal = 16.dp),
+    ) {
+        for (tab in HomeTab.entries) {
+            TabItem(tab = tab, selected = tab == selected, onClick = { onSelect(tab) })
+        }
+    }
+}
+
+@Composable
+private fun TabItem(tab: HomeTab, selected: Boolean, onClick: () -> Unit) {
+    val color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp)
+            .padding(top = 10.dp),
+    ) {
+        Text(
+            tab.label,
+            fontSize = 13.sp,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            color = color,
+        )
+        Spacer(Modifier.height(8.dp))
+        Box(
+            modifier = Modifier
+                .height(2.dp)
+                .width(36.dp)
+                .background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent),
         )
     }
 }
