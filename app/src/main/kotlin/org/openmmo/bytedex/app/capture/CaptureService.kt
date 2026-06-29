@@ -176,6 +176,7 @@ class CaptureService(
             packetId = packetId,
             size = payload.size,
             capturedAtEpochMs = capturedAtEpochMillis,
+            payload = payload,
         )
         synchronized(recentBuffer) {
             recentBuffer.addFirst(record)
@@ -317,6 +318,7 @@ data class RecordedPacket(
     val packetId: Int,
     val size: Int,
     val capturedAtEpochMs: Long,
+    val payload: ByteArray,
 )
 
 data class CaptureStats(

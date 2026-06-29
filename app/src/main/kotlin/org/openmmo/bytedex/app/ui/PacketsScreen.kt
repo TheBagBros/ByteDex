@@ -48,6 +48,7 @@ fun PacketsScreen(packetsFlow: StateFlow<List<RecordedPacket>>) {
     var protocolFilter: PacketSink.Protocol? by remember { mutableStateOf(null) }
     var directionFilter: PacketSink.Direction? by remember { mutableStateOf(null) }
     var idQuery by remember { mutableStateOf(TextFieldValue("")) }
+    var selected: RecordedPacket? by remember { mutableStateOf(null) }
 
     val idFilter = idQuery.text.trim().toIntOrNull()
     val filtered = remember(packets, protocolFilter, directionFilter, idFilter) {
@@ -79,16 +80,29 @@ fun PacketsScreen(packetsFlow: StateFlow<List<RecordedPacket>>) {
             )
         }
 
-        Filters(
-            protocolFilter = protocolFilter,
-            onProtocol = { protocolFilter = it },
-            directionFilter = directionFilter,
-            onDirection = { directionFilter = it },
-            idQuery = idQuery,
-            onIdQuery = { idQuery = it },
-        )
+        val current = selected
+        if (current == null) {
+            Filters(
+                protocolFilter = protocolFilter,
+                onProtocol = { protocolFilter = it },
+                directionFilter = directionFilter,
+                onDirection = { directionFilter = it },
+                idQuery = idQuery,
+                onIdQuery = { idQuery = it },
+            )
 
-        PacketTable(packets = filtered, modifier = Modifier.fillMaxSize().weight(1f))
+            PacketTable(
+                packets = filtered,
+                onSelect = { selected = it },
+                modifier = Modifier.fillMaxSize().weight(1f),
+            )
+        } else {
+            PacketDetail(
+                packet = current,
+                onBack = { selected = null },
+                modifier = Modifier.fillMaxSize().weight(1f),
+            )
+        }
     }
 }
 
@@ -185,7 +199,11 @@ private fun IdFilterField(value: TextFieldValue, onValueChange: (TextFieldValue)
 }
 
 @Composable
-private fun PacketTable(packets: List<RecordedPacket>, modifier: Modifier = Modifier) {
+private fun PacketTable(
+    packets: List<RecordedPacket>,
+    onSelect: (RecordedPacket) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val listState = rememberLazyListState()
     Column(
         modifier = modifier
@@ -203,7 +221,7 @@ private fun PacketTable(packets: List<RecordedPacket>, modifier: Modifier = Modi
             }
         } else {
             LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
-                items(packets, key = { it.seq }) { p -> PacketRow(p) }
+                items(packets, key = { it.seq }) { p -> PacketRow(p, onClick = { onSelect(p) }) }
             }
         }
     }
@@ -226,10 +244,11 @@ private fun TableHeader() {
 }
 
 @Composable
-private fun PacketRow(p: RecordedPacket) {
+private fun PacketRow(p: RecordedPacket, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -272,6 +291,97 @@ private fun androidx.compose.foundation.layout.RowScope.Cell(
 private fun directionColor(direction: PacketSink.Direction): Color = when (direction) {
     PacketSink.Direction.C2S -> MaterialTheme.colorScheme.primary
     PacketSink.Direction.S2C -> MaterialTheme.colorScheme.onSurface
+}
+
+@Composable
+private fun PacketDetail(packet: RecordedPacket, onBack: () -> Unit, modifier: Modifier = Modifier) {
+    val lines = remember(packet.seq) { hexDump(packet.payload) }
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        DetailHeader(packet = packet, onBack = onBack)
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .weight(1f)
+                .clip(RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surface),
+        ) {
+            if (lines.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        "Empty payload",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize().padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    items(lines) { line -> HexLineRow(line) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DetailHeader(packet: RecordedPacket, onBack: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        FilterChip("<- Back", selected = false, onClick = onBack)
+        MetaText(TIME_FORMAT.format(Instant.ofEpochMilli(packet.capturedAtEpochMs)))
+        MetaText(packet.direction.name, color = directionColor(packet.direction))
+        MetaText(packet.protocol.name)
+        MetaText("ID ${packet.packetId}")
+        MetaText("${packet.size} B")
+    }
+}
+
+@Composable
+private fun MetaText(text: String, color: Color = MaterialTheme.colorScheme.onSurface) {
+    Text(text, fontSize = 12.sp, color = color, fontFamily = FontFamily.Monospace)
+}
+
+@Composable
+private fun HexLineRow(line: HexLine) {
+    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text(line.offset, fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(line.hex, fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurface)
+        Text(line.ascii, fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+private data class HexLine(val offset: String, val hex: String, val ascii: String)
+
+private const val HEX_BYTES_PER_LINE = 16
+
+private fun hexDump(payload: ByteArray): List<HexLine> {
+    if (payload.isEmpty()) return emptyList()
+    val lines = ArrayList<HexLine>((payload.size + HEX_BYTES_PER_LINE - 1) / HEX_BYTES_PER_LINE)
+    var offset = 0
+    while (offset < payload.size) {
+        val end = minOf(offset + HEX_BYTES_PER_LINE, payload.size)
+        val hex = StringBuilder()
+        val ascii = StringBuilder()
+        for (i in offset until end) {
+            val v = payload[i].toInt() and 0xFF
+            if (i > offset) hex.append(' ')
+            hex.append(v.toString(16).padStart(2, '0').uppercase())
+            ascii.append(if (v in 0x20..0x7E) v.toChar() else '.')
+        }
+        lines.add(
+            HexLine(
+                offset = offset.toString(16).padStart(4, '0').uppercase(),
+                hex = hex.toString().padEnd(HEX_BYTES_PER_LINE * 3 - 1),
+                ascii = ascii.toString(),
+            ),
+        )
+        offset = end
+    }
+    return lines
 }
 
 private const val TIME_WEIGHT = 2.2f
