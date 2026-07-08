@@ -30,3 +30,10 @@ sourceSets.main {
 }
 
 tasks.named("processResources") { dependsOn(copyAgentKeys) }
+
+// `-Dbytedex.captureLog=<path>` on the gradlew command line only sets a system
+// property on the Gradle JVM, not the forked app JVM `:run` launches -- forward
+// it explicitly so per-session capture logs work (e.g. from an MCP capture tool).
+tasks.named<JavaExec>("run") {
+    System.getProperty("bytedex.captureLog")?.let { systemProperty("bytedex.captureLog", it) }
+}
