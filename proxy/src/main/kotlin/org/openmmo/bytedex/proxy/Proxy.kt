@@ -72,8 +72,25 @@ class Proxy(
 }
 
 fun main() {
-    val proxy = Proxy()
-    Runtime.getRuntime().addShutdownHook(Thread { proxy.stop() })
+    // Lean capture (BROMMO): log every decrypted packet to a file instead of the DB/api sink.
+    val logPath = System.getProperty("bytedex.captureLog", "bytedex-capture.log")
+    val out = java.io.File(logPath).bufferedWriter()
+    val sink = PacketSink { protocol, direction, packetId, payload, capturedAt ->
+        val hex = buildString(payload.size * 2) { for (b in payload) append("%02x".format(b)) }
+        synchronized(out) {
+            out.write("$capturedAt $protocol $direction id=$packetId len=${payload.size} $hex")
+            out.newLine()
+            out.flush()
+        }
+    }
+    val proxy = Proxy(sink = sink)
+    Runtime.getRuntime().addShutdownHook(
+        Thread {
+            runCatching { synchronized(out) { out.close() } }
+            proxy.stop()
+        },
+    )
     proxy.start()
+    println("[bytedex] capture proxy listening on 127.0.0.1:2106/7777/7778 -> logging to $logPath")
     Thread.currentThread().join()
 }
