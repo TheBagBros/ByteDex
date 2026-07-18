@@ -9,6 +9,7 @@ import net.bytebuddy.asm.Advice;
 import net.bytebuddy.matcher.ElementMatchers;
 
 import org.openmmo.bytedex.agent.dns.DnsRedirectAdvice;
+import org.openmmo.bytedex.agent.patches.CustomStringTableAdvice;
 import org.openmmo.bytedex.agent.patches.FlyDestinationUnlockAdvice;
 import org.openmmo.bytedex.agent.patches.ShinyBattleSparkleAdvice;
 
@@ -89,6 +90,15 @@ public final class Agent {
                     )
                 ));
         }
+
+        builder = builder
+            .type(ElementMatchers.named("f.Q1"))
+            .transform((b, type, cl, mod, pd) -> b.visit(
+                Advice.to(CustomStringTableAdvice.class).on(
+                    ElementMatchers.named("tO")
+                        .and(ElementMatchers.takesArguments(boolean.class))
+                )
+            ));
 
         builder = builder
             .type(ElementMatchers.named("f.yC0"))
