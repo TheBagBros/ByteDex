@@ -9,6 +9,8 @@ import net.bytebuddy.asm.Advice;
 import net.bytebuddy.matcher.ElementMatchers;
 
 import org.openmmo.bytedex.agent.dns.DnsRedirectAdvice;
+import org.openmmo.bytedex.agent.patches.FlyDestinationUnlockAdvice;
+import org.openmmo.bytedex.agent.patches.ShinyBattleSparkleAdvice;
 
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -27,6 +29,10 @@ public final class Agent {
 
     private static final String DNS_RESOURCE = "/bytedex-dns.json";
     private static final String JAVA_PREFIX = "java.";
+    private static final String JAVAX_PREFIX = "javax.";
+    private static final String COM_SUN_PREFIX = "com.sun.";
+    private static final String LWJGL_PREFIX = "org.lwjgl.";
+    private static final String AGENT_PREFIX = "org.openmmo.bytedex.agent.";
 
     private Agent() {}
 
@@ -52,12 +58,12 @@ public final class Agent {
             .ignore(
                 ElementMatchers.nameStartsWith(JAVA_PREFIX)
                     .and(ElementMatchers.not(ElementMatchers.named("java.net.InetAddress")))
-                    .or(ElementMatchers.nameStartsWith("javax."))
+                    .or(ElementMatchers.nameStartsWith(JAVAX_PREFIX))
                     .or(ElementMatchers.nameStartsWith("jdk."))
                     .or(ElementMatchers.nameStartsWith("sun."))
-                    .or(ElementMatchers.nameStartsWith("com.sun."))
-                    .or(ElementMatchers.nameStartsWith("org.lwjgl."))
-                    .or(ElementMatchers.nameStartsWith("org.openmmo.bytedex.agent."))
+                    .or(ElementMatchers.nameStartsWith(COM_SUN_PREFIX))
+                    .or(ElementMatchers.nameStartsWith(LWJGL_PREFIX))
+                    .or(ElementMatchers.nameStartsWith(AGENT_PREFIX))
             );
 
         builder = builder
@@ -83,6 +89,24 @@ public final class Agent {
                     )
                 ));
         }
+
+        builder = builder
+            .type(ElementMatchers.named("f.yC0"))
+            .transform((b, type, cl, mod, pd) -> b.visit(
+                Advice.to(FlyDestinationUnlockAdvice.class).on(
+                    ElementMatchers.named("z40")
+                        .and(ElementMatchers.takesArguments(0))
+                )
+            ));
+
+        builder = builder
+            .type(ElementMatchers.named("f.TQ"))
+            .transform((b, type, cl, mod, pd) -> b.visit(
+                Advice.to(ShinyBattleSparkleAdvice.class).on(
+                    ElementMatchers.named("Com8")
+                        .and(ElementMatchers.takesArguments(0))
+                )
+            ));
 
         builder.installOn(inst);
 
@@ -130,9 +154,9 @@ public final class Agent {
         byte[] needle = "revision.txt".getBytes(StandardCharsets.UTF_8);
         for (Class<?> c : inst.getAllLoadedClasses()) {
             String name = c.getName();
-            if (name.startsWith("[") || name.startsWith(JAVA_PREFIX) || name.startsWith("javax.")
-                || name.startsWith("jdk.") || name.startsWith("sun.") || name.startsWith("com.sun.")
-                || name.startsWith("org.lwjgl.") || name.startsWith("org.openmmo.bytedex.agent.")) {
+            if (name.startsWith("[") || name.startsWith(JAVA_PREFIX) || name.startsWith(JAVAX_PREFIX)
+                || name.startsWith("jdk.") || name.startsWith("sun.") || name.startsWith(COM_SUN_PREFIX)
+                || name.startsWith(LWJGL_PREFIX) || name.startsWith(AGENT_PREFIX)) {
                 continue;
             }
             ClassLoader cl = c.getClassLoader();
@@ -162,10 +186,10 @@ public final class Agent {
         List<Class<?>> targets = new ArrayList<>();
         for (Class<?> c : inst.getAllLoadedClasses()) {
             String name = c.getName();
-            boolean excluded = name.startsWith(JAVA_PREFIX) || name.startsWith("javax.")
+            boolean excluded = name.startsWith(JAVA_PREFIX) || name.startsWith(JAVAX_PREFIX)
                 || name.startsWith("jdk.") || name.startsWith("sun.")
-                || name.startsWith("com.sun.") || name.startsWith("org.lwjgl.")
-                || name.startsWith("org.openmmo.bytedex.agent.")
+                || name.startsWith(COM_SUN_PREFIX) || name.startsWith(LWJGL_PREFIX)
+                || name.startsWith(AGENT_PREFIX)
                 || name.startsWith("[");
             if (!excluded && inst.isModifiableClass(c)) {
                 targets.add(c);
