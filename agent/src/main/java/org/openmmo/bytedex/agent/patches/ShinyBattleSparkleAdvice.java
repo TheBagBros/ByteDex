@@ -29,6 +29,7 @@ public final class ShinyBattleSparkleAdvice {
     private static final String SOUND_METHOD = "yc";
     private static final String EFFECT_NAME = "shiny_star_prebaked";
     private static final short SOUND_ID = 250;
+    private static final float DROP_START_DELAY_AFTER_SPAWN = 0.4F;
 
     private ShinyBattleSparkleAdvice() {}
 
@@ -284,7 +285,9 @@ public final class ShinyBattleSparkleAdvice {
         beginGroup.invoke(wrapper);
         appendTimeline.invoke(wrapper, timeline);
         Object sparkleTrack = createTimeline.invoke(null);
-        delay.invoke(sparkleTrack, spawnDelay);
+        // The spawn callback releases the ball effect. The model's drop starts after the
+        // following 0.4-second hold in TQ.Com8, so anchor the stars and sound to that boundary.
+        delay.invoke(sparkleTrack, spawnDelay + DROP_START_DELAY_AFTER_SPAWN);
         beginGroup.invoke(sparkleTrack);
         appendEffect.invoke(sparkleTrack, sparkle);
         if (sound != null && appendEffect.getParameterTypes()[0].isInstance(sound)) {
