@@ -9,7 +9,7 @@ public final class CustomStringTableAdvice {
 
     private static final int SHINY_CHARM_NAME_KEY = 101411;
     private static final String SHINY_CHARM_NAME = "Shiny Charm";
-    private static final String STRING_REGISTRY_CLASS = "f.nv0_0";
+    private static final String STRING_REGISTRY_CLASS = "f.nV0";
     private static final String REGISTER_METHOD = "Gv1";
 
     private CustomStringTableAdvice() {}
