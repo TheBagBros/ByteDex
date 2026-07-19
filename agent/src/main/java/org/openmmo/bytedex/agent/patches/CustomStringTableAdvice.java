@@ -16,6 +16,20 @@ public final class CustomStringTableAdvice {
 
     @Advice.OnMethodExit(suppress = Throwable.class)
     public static void exit(@Advice.Origin Class<?> origin) throws ReflectiveOperationException {
+        // First-fire diagnostic (opt-in via -Dbytedex.debug; canonical name = DiagLog.DEBUG_PROPERTY).
+        // Self-contained: only java.* + string literals so it stays loader-safe when inlined into the
+        // client's isolated loader. Wrapped so it can never disturb the injection below.
+        try {
+            String bytedexDebug = System.getProperty("bytedex.debug");
+            if (bytedexDebug != null && !"false".equalsIgnoreCase(bytedexDebug)
+                && !"0".equals(bytedexDebug)
+                && System.getProperties().putIfAbsent("bytedex.fired.customString", "1") == null) {
+                System.err.println("[bytedex] advice customString fired");
+            }
+        } catch (Throwable ignoredDiag) {
+            // Diagnostics must never break a patch.
+        }
+
         ClassLoader loader = origin == null ? null : origin.getClassLoader();
         Class<?> strings = Class.forName(STRING_REGISTRY_CLASS, false, loader);
         Method register = strings.getDeclaredMethod(REGISTER_METHOD, int.class, String.class);
