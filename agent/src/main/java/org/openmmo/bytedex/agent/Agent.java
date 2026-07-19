@@ -47,6 +47,7 @@ public final class Agent {
 
     private static void install(String args, Instrumentation inst) {
         List<String> dnsRedirects = loadDnsRedirects();
+        List<String> registrations = new ArrayList<>();
 
         if (!dnsRedirects.isEmpty()) {
             System.setProperty(DnsRedirectAdvice.SYSTEM_PROPERTY, String.join(",", dnsRedirects));
@@ -77,6 +78,8 @@ public final class Agent {
                             byte[].class, byte[].class, PublicKey.class, String.class))
                 )
             ));
+        registrations.add("verifyBypass  (VerifyBypassAdvice)  -> "
+            + "<app classes>#static boolean(byte[],byte[],PublicKey,String)");
 
         if (!dnsRedirects.isEmpty()) {
             builder = builder
@@ -89,6 +92,8 @@ public final class Agent {
                                 .or(ElementMatchers.named("getAllByName")))
                     )
                 ));
+            registrations.add("dnsRedirect  (DnsRedirectAdvice)  -> "
+                + "java.net.InetAddress#getByName/getAllByName");
         }
 
         builder = builder
@@ -99,6 +104,7 @@ public final class Agent {
                         .and(ElementMatchers.takesArguments(boolean.class))
                 )
             ));
+        registrations.add("customString  (CustomStringTableAdvice)  -> f.Q1#tO(boolean)");
 
         builder = builder
             .type(ElementMatchers.named("f.yC0"))
@@ -108,6 +114,7 @@ public final class Agent {
                         .and(ElementMatchers.takesArguments(0))
                 )
             ));
+        registrations.add("flyUnlock  (FlyDestinationUnlockAdvice)  -> f.yC0#z40()");
 
         builder = builder
             .type(ElementMatchers.named("f.TQ"))
@@ -117,8 +124,10 @@ public final class Agent {
                         .and(ElementMatchers.takesArguments(0))
                 )
             ));
+        registrations.add("shinySparkle  (ShinyBattleSparkleAdvice)  -> f.TQ#Com8()");
 
         builder.installOn(inst);
+        DiagLog.premainSummary(DiagLog.agentBuild(), registrations);
 
         if (!dnsRedirects.isEmpty()) {
             try {

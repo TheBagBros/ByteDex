@@ -74,8 +74,18 @@ class Proxy(
 fun main() {
     // Lean capture (BROMMO): log every decrypted packet to a file instead of the DB/api sink.
     val logPath = System.getProperty("bytedex.captureLog", "bytedex-capture.log")
+    // Opt-in diagnostics, same flag as the agent (-Dbytedex.debug); must be passed to THIS JVM too.
+    val debug = System.getProperty("bytedex.debug")
+        ?.let { !it.equals("false", ignoreCase = true) && it != "0" } == true
+    val firstPacketLogged = java.util.concurrent.atomic.AtomicBoolean(false)
     val out = java.io.File(logPath).bufferedWriter()
     val sink = PacketSink { protocol, direction, packetId, payload, capturedAt ->
+        if (debug && firstPacketLogged.compareAndSet(false, true)) {
+            System.err.println(
+                "[bytedex] capture proxy first packet captured: " +
+                    "$protocol $direction id=$packetId len=${payload.size}",
+            )
+        }
         val hex = buildString(payload.size * 2) { for (b in payload) append("%02x".format(b)) }
         synchronized(out) {
             out.write("$capturedAt $protocol $direction id=$packetId len=${payload.size} $hex")

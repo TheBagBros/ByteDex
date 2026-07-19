@@ -69,6 +69,21 @@ public final class ShinyBattleSparkleAdvice {
         }
         if (shinyMethod == null || !Boolean.TRUE.equals(shinyMethod.invoke(monster))) return;
 
+        // First-fire diagnostic (opt-in via -Dbytedex.debug; canonical name = DiagLog.DEBUG_PROPERTY).
+        // Placed after the shiny check so the line proves a real shiny reached the sparkle path.
+        // Self-contained: only java.* + string literals so it stays loader-safe when inlined into the
+        // client's isolated loader. Wrapped so it can never disturb the entrance below.
+        try {
+            String bytedexDebug = System.getProperty("bytedex.debug");
+            if (bytedexDebug != null && !"false".equalsIgnoreCase(bytedexDebug)
+                && !"0".equals(bytedexDebug)
+                && System.getProperties().putIfAbsent("bytedex.fired.shinySparkle", "1") == null) {
+                System.err.println("[bytedex] advice shinySparkle fired");
+            }
+        } catch (Throwable ignoredDiag) {
+            // Diagnostics must never break a patch.
+        }
+
         Method effectMethod = null;
         for (Class<?> current = sendOut.getClass(); current != null;
              current = current.getSuperclass()) {

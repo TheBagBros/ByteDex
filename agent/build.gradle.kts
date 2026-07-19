@@ -75,6 +75,8 @@ tasks.shadowJar {
             "Premain-Class" to "org.openmmo.bytedex.agent.Agent",
             "Can-Retransform-Classes" to "true",
             "Can-Redefine-Classes" to "true",
+            "Implementation-Title" to "bytedex-agent",
+            "Implementation-Version" to project.version.toString(),
         )
     }
 

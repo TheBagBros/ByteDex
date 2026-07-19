@@ -36,6 +36,21 @@ public final class DnsRedirectAdvice {
         }
         if (!matched) return null;
 
+        // First-fire diagnostic (opt-in via -Dbytedex.debug; canonical name = DiagLog.DEBUG_PROPERTY).
+        // NOTE: this advice is inlined into bootstrap-loaded java.net.InetAddress, so it may reference
+        // ONLY java.* + string literals -- an agent helper class would NoClassDefFoundError here.
+        // Wrapped so it can never disturb the redirect below.
+        try {
+            String bytedexDebug = System.getProperty("bytedex.debug");
+            if (bytedexDebug != null && !"false".equalsIgnoreCase(bytedexDebug)
+                && !"0".equals(bytedexDebug)
+                && System.getProperties().putIfAbsent("bytedex.fired.dnsRedirect", "1") == null) {
+                System.err.println("[bytedex] advice dnsRedirect fired");
+            }
+        } catch (Throwable ignoredDiag) {
+            // Diagnostics must never break a patch.
+        }
+
         try {
             InetAddress addr = InetAddress.getByAddress(host, new byte[]{127, 0, 0, 1});
             if ("getAllByName".equals(methodName)) {
